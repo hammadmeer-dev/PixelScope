@@ -9,6 +9,30 @@ type StoredTabState = TabState;
 const recentEventFingerprints = new Map<number, Map<string, number>>(); // tabId -> fingerprint -> lastSeenTs
 const pixelIdsPerTab = new Map<number, Set<string>>(); // tabId -> set of pixelIds
 
+// Long-lived ports from DevTools panels: portName -> port
+// Port names come from Panel.tsx as `devtools-panel-${tabId}`
+const devToolsPorts = new Map<string, chrome.runtime.Port>();
+
+function broadcastToDevTools(tabId: number, event: PixelEvent) {
+  const portName = `devtools-panel-${tabId}`;
+  const port = devToolsPorts.get(portName);
+  if (!port) return;
+  try {
+    port.postMessage({ type: 'PIXEL_EVENT_CAPTURED', payload: event });
+  } catch {
+    // Port disconnected — remove it
+    devToolsPorts.delete(portName);
+  }
+}
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port.name.startsWith('devtools-panel-')) return;
+  devToolsPorts.set(port.name, port);
+  port.onDisconnect.addListener(() => {
+    devToolsPorts.delete(port.name);
+  });
+});
+
 function now() {
   return Date.now();
 }
@@ -224,6 +248,9 @@ async function ingestPixelEvent(tabId: number, senderUrl: string, payload: unkno
 
   await saveTabState(state);
   await setBadge(tabId, state.events.length, getWorstStatusFromPlatforms(state.platforms));
+
+  // Push to any open DevTools panels for this tab
+  broadcastToDevTools(tabId, ev);
 }
 
 async function ingestConsentMode(tabId: number, senderUrl: string, payload: unknown) {

@@ -37,9 +37,11 @@ export function OverviewTab() {
     return { hostname, totalEvents, platformsDetected, warningsCount };
   }, [events, platforms]);
 
-  const handleOpenDevtools = () => {
+  const handleOpenDevtools = async () => {
     try {
-      const url = chrome.runtime.getURL('src/devtools/devtools.html');
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      const url = chrome.runtime.getURL(`/src/devtools/panel/panel.html?tabId=${tab.id}`);
       chrome.tabs.create({ url });
     } catch {
       // ignore

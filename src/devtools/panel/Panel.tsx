@@ -13,8 +13,13 @@ type FilterStatus = EventStatus | 'all';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function getInspectedTabId(): number {
-  return chrome.devtools.inspectedWindow.tabId;
+function getInspectedTabId(): number | null {
+  if (typeof chrome !== 'undefined' && chrome.devtools?.inspectedWindow) {
+    return chrome.devtools.inspectedWindow.tabId;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const tabId = params.get('tabId');
+  return tabId ? parseInt(tabId, 10) : null;
 }
 
 function stableStringify(v: unknown): string {
@@ -74,6 +79,7 @@ export default function Panel() {
 
   // ── Initial load via GET_TAB_STATE ────────────────────────────────────
   useEffect(() => {
+    if (!tabId) return;
     chrome.runtime.sendMessage(
       { type: 'GET_TAB_STATE', payload: null, tabId },
       (response: TabState | undefined) => {

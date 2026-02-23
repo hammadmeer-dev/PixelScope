@@ -6,6 +6,7 @@ import { DebugTab } from './DebugTab';
 import { usePixelScopeStore } from '../../shared/store';
 import { sendToBackground } from '../../shared/message-bus';
 import type { TabState } from '../../shared/types';
+import icon from '../../../public/icons/icon128.png';
 
 export function App() {
   const activeTab = usePixelScopeStore((s) => s.activeTab);
@@ -42,9 +43,7 @@ export function App() {
     <div className="w-[380px] bg-slate-950 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-emerald-400 text-xs font-bold">
-            PS
-          </div>
+          <img src={icon} alt="PixelScope" className="flex h-9 w-9 items-center justify-center rounded-lg h-5 w-5" />
           <div>
             <h1 className="text-sm font-semibold leading-tight">PixelScope</h1>
             <p className="text-[11px] text-slate-400">Tracking inspector</p>

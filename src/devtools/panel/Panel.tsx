@@ -4,7 +4,7 @@ import { PayloadInspector } from './PayloadInspector';
 import { DataLayerTimeline } from './DataLayerTimeline';
 import { PLATFORM_META } from '../../shared/constants';
 import type { EventStatus, PixelEvent, Platform, PlatformSummary, TabState } from '../../shared/types';
-
+import icon from '../../../public/icons/icon128.png';
 // ─── Types ────────────────────────────────────────────────────────────────
 
 type ActiveView = 'events' | 'datalayer';
@@ -167,9 +167,7 @@ export default function Panel() {
       <header className="flex shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900/60 px-4 py-2">
         {/* Logo */}
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-sky-500 to-emerald-400 text-[10px] font-bold text-white">
-            PS
-          </div>
+          <img src={icon} alt="PixelScope" className="flex h-9 w-9 items-center justify-center rounded-lg h-5 w-5" />
           <span className="text-sm font-semibold text-slate-100">PixelScope</span>
         </div>
 

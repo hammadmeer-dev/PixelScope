@@ -1,5 +1,6 @@
 import type { ConsentModeState, EventStatus, ExtensionMessage, PixelEvent, Platform, PlatformSummary, TabState } from '../shared/types';
 import { validatePixelEvent } from '../parsers/validator';
+import { sanitizeValue } from '../shared/utils';
 
 const TAB_STATE_PREFIX = 'pixelscope:tabstate:'; // + tabId
 const DEDUP_WINDOW_MS = 500;
@@ -150,12 +151,17 @@ function getWorstStatusFromPlatforms(platforms: PlatformSummary[]): EventStatus 
 }
 
 async function setBadge(tabId: number, count: number, status: EventStatus) {
-  const text = count > 99 ? '99+' : count > 0 ? String(count) : '';
-  await chrome.action.setBadgeText({ tabId, text });
-  await chrome.action.setBadgeBackgroundColor({
-    tabId,
-    color: status === 'error' ? '#ef4444' : status === 'warning' ? '#f59e0b' : '#10b981',
-  });
+  try {
+    const text = count > 99 ? '99+' : count > 0 ? String(count) : '';
+    await chrome.action.setBadgeText({ tabId, text });
+    await chrome.action.setBadgeBackgroundColor({
+      tabId,
+      color: status === 'error' ? '#ef4444' : status === 'warning' ? '#f59e0b' : '#10b981',
+    });
+  } catch (err) {
+    // Tab might have been closed - ignore "No tab with id" errors
+    console.debug('Failed to set badge for tab:', tabId, err);
+  }
 }
 
 function applyDedupWarning(tabId: number, event: PixelEvent) {
@@ -199,10 +205,11 @@ function buildPixelEventFromPayload(payload: any, pageUrlFallback: string): Pixe
   const platform = payload?.platform as Platform;
   const method = typeof payload?.method === 'string' ? payload.method : 'unknown';
   const eventName = typeof payload?.eventName === 'string' ? payload.eventName : 'unknown';
-  const params =
+  const paramsInput =
     payload?.params && typeof payload.params === 'object' && !Array.isArray(payload.params)
       ? (payload.params as Record<string, unknown>)
       : {};
+  const params = sanitizeValue(paramsInput);
   const timestamp = typeof payload?.timestamp === 'number' ? payload.timestamp : now();
   const url = typeof payload?.url === 'string' ? payload.url : pageUrlFallback;
   const origin = payload?.origin === 'network' || payload?.origin === 'datalayer' ? payload.origin : 'js_hook';

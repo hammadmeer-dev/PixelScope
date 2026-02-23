@@ -1,4 +1,5 @@
 import { PIXEL_GLOBALS } from '../shared/constants';
+import { sanitizeValue } from '../shared/utils';
 import type { ConsentModeState, ExtensionMessage, Platform } from '../shared/types';
 
 declare global {
@@ -34,11 +35,11 @@ function captureEvent(args: {
       platform: args.platform,
       method: args.method,
       eventName: args.eventName,
-      params: args.params,
+      params: sanitizeValue(args.params),
       timestamp: Date.now(),
       url: location.href,
       origin: args.origin,
-      rawArgs: args.rawArgs,
+      rawArgs: sanitizeValue(args.rawArgs),
     },
   });
 }

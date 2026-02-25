@@ -1,4 +1,5 @@
 import { PIXEL_GLOBALS } from '../shared/constants';
+import { sanitizeValue } from '../shared/utils';
 import type { ConsentModeState, ExtensionMessage, Platform } from '../shared/types';
 
 declare global {
@@ -34,21 +35,53 @@ function captureEvent(args: {
       platform: args.platform,
       method: args.method,
       eventName: args.eventName,
-      params: args.params,
+      params: sanitizeValue(args.params),
       timestamp: Date.now(),
       url: location.href,
       origin: args.origin,
-      rawArgs: args.rawArgs,
+      rawArgs: sanitizeValue(args.rawArgs),
     },
   });
 }
 
 function captureDataLayerPush(args: unknown[]) {
+  const pushed = args[0];
+  let pushedEventName = 'dataLayer.push';
+  const params: Record<string, unknown> = {};
+
+  // Format 1 — plain object: dataLayer.push({ event: 'my_event', key: val, ... })
+  // This is the standard GTM custom event format.
+  if (isRecord(pushed)) {
+    if (typeof pushed['event'] === 'string' && pushed['event']) {
+      pushedEventName = pushed['event'] as string;
+    }
+    for (const [k, v] of Object.entries(pushed)) {
+      if (k !== 'event') params[k] = v;
+    }
+  }
+
+  // Format 2 — array: dataLayer.push(['event', 'my_event', { ...params }])
+  // gtag() internally uses this format when it pushes to dataLayer.
+  // e.g. gtag('event', 'wpa_view_course', { currency: 'USD', ... })
+  //   → dataLayer.push(['event', 'wpa_view_course', { currency: 'USD', ... }])
+  else if (Array.isArray(pushed)) {
+    const cmd = pushed[0];
+    const name = pushed[1];
+    const extra = pushed[2];
+    if (typeof name === 'string' && name) {
+      // Use 'command:name' as event name so it's clear, e.g. 'event:wpa_view_course'
+      pushedEventName = typeof cmd === 'string' && cmd !== 'event' ? `${cmd}:${name}` : name;
+    }
+    if (isRecord(extra)) {
+      Object.assign(params, extra);
+    }
+  }
+
   captureEvent({
     platform: 'gtm',
     method: 'dataLayer.push',
-    eventName: 'dataLayer.push',
-    params: { args },
+    eventName: pushedEventName,
+    params,
     origin: 'datalayer',
     rawArgs: args,
   });
@@ -204,18 +237,49 @@ function hookDataLayer() {
   window.dataLayer = proxied;
 }
 
-function hookGtagForConsent() {
+function hookGtag() {
   if (typeof window.gtag !== 'function') return;
   const original = window.gtag;
   window.gtag = (...args: unknown[]) => {
     try {
-      if (args[0] === 'consent') {
+      const command = args[0];
+
+      // Handle consent signals.
+      if (command === 'consent') {
         const state = parseConsentStateFromConsentObject(args[2]);
         if (state) postToIsolated({ type: 'CONSENT_MODE_DETECTED', payload: state });
         else captureConsentModeIfPresent();
       }
+
+      // Capture GA4 events: gtag('event', 'event_name', { ...params })
+      if (command === 'event') {
+        const eventName = typeof args[1] === 'string' ? args[1] : 'unknown';
+        const params = isRecord(args[2]) ? args[2] : {};
+        captureEvent({
+          platform: 'ga4',
+          method: 'gtag',
+          eventName,
+          params,
+          origin: 'js_hook',
+          rawArgs: args,
+        });
+      }
+
+      // Capture config calls: gtag('config', 'G-XXXXXXXX', { ...params })
+      if (command === 'config') {
+        const measurementId = typeof args[1] === 'string' ? args[1] : 'unknown';
+        const params = isRecord(args[2]) ? args[2] : {};
+        captureEvent({
+          platform: 'ga4',
+          method: 'gtag:config',
+          eventName: `config:${measurementId}`,
+          params,
+          origin: 'js_hook',
+          rawArgs: args,
+        });
+      }
     } catch {
-      // ignore
+      // Never break page scripts.
     }
     return original(...args);
   };
@@ -232,7 +296,7 @@ function hookGtagForConsent() {
 
   // Hook dataLayer + Consent Mode signals.
   hookDataLayer();
-  hookGtagForConsent();
+  hookGtag();
   captureConsentModeIfPresent();
 })();
 
